@@ -655,7 +655,7 @@ async def settings_send_code(
     try:
         await tg_client_service.send_code(api_id, api_hash, phone.strip())
         return RedirectResponse(
-            url="/settings?msg=SMS+код+отправлен+на+номер+" + phone.strip() + "&msg_type=success",
+            url="/settings?msg=Код+отправлен+на+номер+" + phone.strip().replace("+", "%2B") + "&msg_type=success",
             status_code=303,
         )
     except Exception as e:
