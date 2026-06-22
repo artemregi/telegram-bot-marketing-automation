@@ -54,17 +54,25 @@
               <input type="password" class="form-control" name="password"
                 placeholder="Оставьте пустым если нет 2FA" style="max-width:300px">
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
               <button type="submit" class="btn btn-success">
                 <i class="bi bi-check-circle me-1"></i>Подтвердить
               </button>
-              <a href="/settings/disconnect" class="btn btn-outline-secondary"
-                onclick="event.preventDefault(); document.getElementById('resetForm').submit()">
-                Ввести другой номер
-              </a>
             </div>
           </form>
-          <form id="resetForm" method="POST" action="/settings/disconnect" class="d-none"></form>
+
+          <div class="d-flex gap-2 mt-3">
+            <form method="POST" action="/settings/resend-code">
+              <button type="submit" class="btn btn-outline-warning btn-sm">
+                <i class="bi bi-arrow-repeat me-1"></i>Запросить код повторно
+              </button>
+            </form>
+            <form method="POST" action="/settings/reset">
+              <button type="submit" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Ввести другой номер
+              </button>
+            </form>
+          </div>
         {% else %}
           <div class="alert alert-secondary border-0 mb-4" style="background:#1a1a2a">
             <i class="bi bi-info-circle me-2"></i>

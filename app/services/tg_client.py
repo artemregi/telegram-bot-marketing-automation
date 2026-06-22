@@ -158,6 +158,7 @@ class TgClientService:
     # Disconnect / reset
     # ------------------------------------------------------------------
     async def disconnect(self):
+        """Remove connected session but keep credentials."""
         if self._auth_client:
             try:
                 await self._auth_client.disconnect()
@@ -168,6 +169,21 @@ class TgClientService:
         async with async_session_maker() as session:
             await _set(session, KEY_SESSION,      None)
             await _set(session, KEY_ACCOUNT_NAME, None)
+            await session.commit()
+
+    async def reset(self):
+        """Clear ALL state — credentials, session, pending auth."""
+        if self._auth_client:
+            try:
+                await self._auth_client.disconnect()
+            except Exception:
+                pass
+            self._auth_client = None
+
+        async with async_session_maker() as session:
+            for key in (KEY_API_ID, KEY_API_HASH, KEY_PHONE,
+                        KEY_SESSION, KEY_CODE_HASH, KEY_ACCOUNT_NAME):
+                await _set(session, key, None)
             await session.commit()
 
     # ------------------------------------------------------------------

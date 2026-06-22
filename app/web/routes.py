@@ -705,3 +705,40 @@ async def settings_disconnect(request: Request):
         url="/settings?msg=Аккаунт+отключён&msg_type=info",
         status_code=303,
     )
+
+
+@app.post("/settings/reset")
+async def settings_reset(request: Request):
+    """Clear ALL auth state — return to the initial credentials form."""
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    await tg_client_service.reset()
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@app.post("/settings/resend-code")
+async def settings_resend_code(request: Request):
+    """Re-send the code to the same phone number."""
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    creds = await tg_client_service.get_credentials()
+    if not creds.get("api_id") or not creds.get("phone"):
+        return RedirectResponse(url="/settings", status_code=303)
+
+    try:
+        await tg_client_service.send_code(
+            int(creds["api_id"]), creds["api_hash"], creds["phone"]
+        )
+        return RedirectResponse(
+            url=f"/settings?msg=Код+отправлен+повторно+на+{creds['phone']}&msg_type=success",
+            status_code=303,
+        )
+    except Exception as e:
+        return RedirectResponse(
+            url=f"/settings?msg=Ошибка:+{str(e)[:80]}&msg_type=danger",
+            status_code=303,
+        )
