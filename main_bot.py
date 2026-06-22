@@ -23,7 +23,8 @@ async def main():
     dp.message.middleware(UserMiddleware())
     dp.include_router(router)
     broadcast_service.set_bot(bot)
-    await dp.start_polling(bot, drop_pending_updates=True)
+    # Process pending updates (messages received while bot was offline, up to 24h)
+    await dp.start_polling(bot, drop_pending_updates=False)
 
 
 if __name__ == "__main__":

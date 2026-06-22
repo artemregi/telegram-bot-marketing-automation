@@ -18,6 +18,7 @@ from app.services.broadcast import broadcast_service
 from app.services.keyword_service import keyword_service
 from app.services.user_service import user_service
 from app.services.tg_client import tg_client_service
+from app.services.history_scanner import history_scanner
 from app.web.auth import (
     check_credentials, create_session_token, get_current_user,
     SESSION_COOKIE_NAME
@@ -716,6 +717,45 @@ async def settings_reset(request: Request):
 
     await tg_client_service.reset()
     return RedirectResponse(url="/settings", status_code=303)
+
+
+@app.post("/settings/scan-history")
+async def settings_scan_history(
+    request: Request,
+    days_back: int = Form(7),
+):
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    if history_scanner.is_running:
+        return RedirectResponse(
+            url="/settings?msg=Сканирование+уже+запущено&msg_type=warning",
+            status_code=303,
+        )
+
+    if not await tg_client_service.is_connected():
+        return RedirectResponse(
+            url="/settings?msg=Сначала+подключи+Telegram+аккаунт&msg_type=danger",
+            status_code=303,
+        )
+
+    asyncio.create_task(history_scanner.scan(days_back=days_back))
+    return RedirectResponse(
+        url=f"/settings?msg=Сканирование+запущено+за+последние+{days_back}+дней&msg_type=success",
+        status_code=303,
+    )
+
+
+@app.get("/api/scan-status")
+async def scan_status(request: Request):
+    admin = get_current_user(request)
+    if not admin:
+        raise HTTPException(status_code=401)
+    return JSONResponse({
+        "running": history_scanner.is_running,
+        **history_scanner.progress,
+    })
 
 
 @app.post("/settings/resend-code")

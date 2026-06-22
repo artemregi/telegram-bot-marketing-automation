@@ -114,6 +114,54 @@
       </div>
     </div>
 
+    {% if connected %}
+    <!-- History Scanner -->
+    <div class="card border-0 mb-4">
+      <div class="card-body p-4">
+        <h5 class="fw-semibold mb-1"><i class="bi bi-clock-history me-2"></i>Сканировать историю сообщений</h5>
+        <p class="text-muted small mb-3">
+          Проверяет переписки в Telegram-аккаунте за выбранный период.
+          Если находит ключевые слова — отправляет ответ тем, кому ещё не отвечали.
+        </p>
+        <form method="POST" action="/settings/scan-history" class="d-flex align-items-end gap-3 flex-wrap">
+          <div>
+            <label class="form-label fw-semibold small mb-1">Период</label>
+            <select class="form-select" name="days_back" style="width:auto">
+              <option value="3">Последние 3 дня</option>
+              <option value="7" selected>Последние 7 дней</option>
+              <option value="14">Последние 14 дней</option>
+              <option value="30">Последние 30 дней</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" id="scanBtn">
+            <i class="bi bi-search me-1"></i>Запустить сканирование
+          </button>
+        </form>
+
+        <!-- Scan progress (shown while running) -->
+        <div id="scanProgress" class="mt-3 d-none">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            <span class="fw-semibold small">Сканирование...</span>
+          </div>
+          <div class="small text-muted">
+            Диалогов: <span id="spDialogsDone">0</span> / <span id="spDialogsTotal">?</span> &nbsp;·&nbsp;
+            Совпадений: <span id="spMatches">0</span> &nbsp;·&nbsp;
+            Ответов отправлено: <span id="spSent">0</span>
+          </div>
+          <div class="text-muted small mt-1">Текущий: <span id="spCurrent">—</span></div>
+        </div>
+        <div id="scanDone" class="mt-3 d-none">
+          <div class="alert alert-success border-0 mb-0 py-2" style="background:#0d2a1a">
+            <i class="bi bi-check-circle me-1"></i>
+            Готово — найдено совпадений: <span id="sdMatches">0</span>,
+            ответов отправлено: <span id="sdSent">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- How it works -->
     <div class="card border-0">
       <div class="card-body p-4">
@@ -129,4 +177,34 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  function pollScan() {
+    fetch('/api/scan-status').then(r => r.json()).then(data => {
+      const progress = document.getElementById('scanProgress');
+      const done = document.getElementById('scanDone');
+      if (!progress) return;
+      if (data.running) {
+        progress.classList.remove('d-none');
+        done.classList.add('d-none');
+        document.getElementById('spDialogsDone').textContent = data.dialogs_done || 0;
+        document.getElementById('spDialogsTotal').textContent = data.dialogs_total || '?';
+        document.getElementById('spMatches').textContent = data.matches_found || 0;
+        document.getElementById('spSent').textContent = data.responses_sent || 0;
+        document.getElementById('spCurrent').textContent = data.current_dialog || '—';
+        setTimeout(pollScan, 2000);
+      } else if (data.status === 'done') {
+        progress.classList.add('d-none');
+        done.classList.remove('d-none');
+        document.getElementById('sdMatches').textContent = data.matches_found || 0;
+        document.getElementById('sdSent').textContent = data.responses_sent || 0;
+      }
+    }).catch(() => {});
+  }
+  pollScan();
+})();
+</script>
 {% endblock %}
