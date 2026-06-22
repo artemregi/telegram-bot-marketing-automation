@@ -308,14 +308,72 @@ async def users_list(request: Request, search: str = ""):
         users = await user_service.get_users(session, search=search or None)
         all_tags = await user_service.get_all_tags(session)
 
+    pyro_connected = await tg_client_service.is_connected()
+
     return templates.TemplateResponse("users.html", {
         "request": request,
         "users": users,
         "search": search,
         "all_tags": all_tags,
+        "pyro_connected": pyro_connected,
         "flash": get_flash(request),
         "admin_user": user,
     })
+
+
+@app.post("/users/send-message")
+async def user_send_message(
+    request: Request,
+    user_id: int = Form(...),
+    text: str = Form(...),
+):
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    async with async_session_maker() as session:
+        result = await session.execute(select(User).where(User.id == user_id))
+        u = result.scalar_one_or_none()
+
+    if not u:
+        return RedirectResponse(url="/users?msg=Пользователь+не+найден&msg_type=danger", status_code=303)
+
+    telegram_id = u.telegram_id
+    error_msg = None
+
+    # Try Pyrogram first, fall back to bot
+    pyro_client = None
+    try:
+        pyro_client = await tg_client_service.get_client()
+    except Exception as e:
+        logger.warning(f"Pyrogram unavailable: {e}")
+
+    try:
+        if pyro_client:
+            await pyro_client.send_message(chat_id=telegram_id, text=text)
+            await pyro_client.stop()
+        elif broadcast_service._bot:
+            await broadcast_service._bot.send_message(chat_id=telegram_id, text=text)
+        else:
+            error_msg = "Ни Pyrogram, ни бот не настроены"
+    except Exception as e:
+        if pyro_client:
+            try:
+                await pyro_client.stop()
+            except Exception:
+                pass
+        error_msg = str(e)[:120]
+
+    if error_msg:
+        return RedirectResponse(
+            url=f"/users?msg=Ошибка+отправки:+{error_msg}&msg_type=danger",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/users?msg=Сообщение+отправлено&msg_type=success",
+        status_code=303,
+    )
 
 
 @app.post("/users/add")
