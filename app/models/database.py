@@ -1,6 +1,11 @@
+import asyncio
+import logging
+import os
+
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
-import os
+
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:password@localhost:5432/botdb")
 
@@ -17,6 +22,16 @@ async def get_session() -> AsyncSession:
         yield session
 
 
-async def create_tables():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+async def create_tables(retries: int = 10, delay: float = 3.0):
+    """Create all tables, retrying if the DB is not ready yet."""
+    for attempt in range(1, retries + 1):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database tables ready.")
+            return
+        except Exception as e:
+            logger.warning("DB not ready (attempt %d/%d): %s", attempt, retries, e)
+            if attempt == retries:
+                raise
+            await asyncio.sleep(delay)
