@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Settings — Bot Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold mb-0"><i class="bi bi-gear me-2 text-primary"></i>Настройки</h2>
+    <span class="text-muted small">Telegram аккаунт для рассылок</span>
+  </div>
+</div>
+
+<!-- Status card -->
+<div class="row mb-4">
+  <div class="col-12 col-lg-8">
+    <div class="card border-0 mb-4">
+      <div class="card-body p-4">
+        <h5 class="fw-semibold mb-3"><i class="bi bi-person-badge me-2"></i>Статус аккаунта</h5>
+        {% if connected %}
+          <div class="d-flex align-items-center gap-3 mb-4">
+            <div style="width:48px;height:48px;border-radius:50%;background:#1a3a2a;display:flex;align-items:center;justify-content:center">
+              <i class="bi bi-person-check-fill text-success fs-4"></i>
+            </div>
+            <div>
+              <div class="fw-semibold text-success">Подключён</div>
+              <div class="text-muted small">{{ creds.account_name }} · {{ creds.phone }}</div>
+            </div>
+            <form method="POST" action="/settings/disconnect" class="ms-auto">
+              <button type="submit" class="btn btn-outline-danger btn-sm"
+                onclick="return confirm('Отключить аккаунт?')">
+                <i class="bi bi-x-circle me-1"></i>Отключить
+              </button>
+            </form>
+          </div>
+          <div class="alert alert-success border-0 mb-0" style="background:#0d2a1a">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            Рассылки будут отправляться с этого аккаунта. Бот по-прежнему используется для входящих сообщений.
+          </div>
+        {% elif awaiting_code %}
+          <div class="alert alert-warning border-0 mb-4" style="background:#2a2000">
+            <i class="bi bi-phone me-2"></i>
+            Код отправлен на <strong>{{ creds.phone }}</strong>. Введите его ниже.
+          </div>
+          <!-- Code entry form -->
+          <form method="POST" action="/settings/verify-code">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Код из Telegram <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="code"
+                placeholder="12345" maxlength="10" autofocus
+                style="font-size:1.4rem;letter-spacing:0.3rem;max-width:200px">
+              <div class="form-text text-muted">Код из SMS или Telegram-приложения</div>
+            </div>
+            <div class="mb-4">
+              <label class="form-label fw-semibold">Пароль 2FA <span class="text-muted fw-normal">(если включён)</span></label>
+              <input type="password" class="form-control" name="password"
+                placeholder="Оставьте пустым если нет 2FA" style="max-width:300px">
+            </div>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-check-circle me-1"></i>Подтвердить
+              </button>
+              <a href="/settings/disconnect" class="btn btn-outline-secondary"
+                onclick="event.preventDefault(); document.getElementById('resetForm').submit()">
+                Ввести другой номер
+              </a>
+            </div>
+          </form>
+          <form id="resetForm" method="POST" action="/settings/disconnect" class="d-none"></form>
+        {% else %}
+          <div class="alert alert-secondary border-0 mb-4" style="background:#1a1a2a">
+            <i class="bi bi-info-circle me-2"></i>
+            Аккаунт не подключён. Рассылки будут идти через бота (только тем, кто написал первым).
+          </div>
+          <!-- Connect form -->
+          <form method="POST" action="/settings/send-code">
+            <div class="row g-3 mb-3">
+              <div class="col-12">
+                <div class="alert border-0 mb-0 p-3" style="background:#16213e;font-size:0.85rem">
+                  <i class="bi bi-link-45deg me-1"></i>
+                  Получите <strong>API ID</strong> и <strong>API Hash</strong> на
+                  <a href="https://my.telegram.org/apps" target="_blank" class="text-info">my.telegram.org</a>
+                  → API development tools
+                </div>
+              </div>
+              <div class="col-sm-4">
+                <label class="form-label fw-semibold">API ID <span class="text-danger">*</span></label>
+                <input type="number" class="form-control" name="api_id"
+                  placeholder="12345678" required value="{{ creds.api_id or '' }}">
+              </div>
+              <div class="col-sm-8">
+                <label class="form-label fw-semibold">API Hash <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="api_hash"
+                  placeholder="0123456789abcdef0123456789abcdef" required value="{{ creds.api_hash or '' }}">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label fw-semibold">Номер телефона <span class="text-danger">*</span></label>
+                <input type="tel" class="form-control" name="phone"
+                  placeholder="+79001234567" required value="{{ creds.phone or '' }}">
+                <div class="form-text text-muted">Формат: +7XXXXXXXXXX</div>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-send me-1"></i>Отправить код
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- How it works -->
+    <div class="card border-0">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold text-muted mb-3"><i class="bi bi-question-circle me-2"></i>Как это работает</h6>
+        <div class="d-flex flex-column gap-2 small text-muted">
+          <div><i class="bi bi-1-circle-fill text-primary me-2"></i>Зайдите на <strong>my.telegram.org</strong> → "API development tools" и создайте приложение</div>
+          <div><i class="bi bi-2-circle-fill text-primary me-2"></i>Скопируйте <strong>App api_id</strong> (число) и <strong>App api_hash</strong> (строка)</div>
+          <div><i class="bi bi-3-circle-fill text-primary me-2"></i>Введите номер телефона аккаунта, с которого хотите делать рассылки</div>
+          <div><i class="bi bi-4-circle-fill text-primary me-2"></i>Введите код из Telegram — аккаунт будет подключён и сессия сохранена</div>
+          <div><i class="bi bi-5-circle-fill text-success me-2"></i>Теперь в разделе <strong>Broadcast</strong> рассылки пойдут от этого аккаунта</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

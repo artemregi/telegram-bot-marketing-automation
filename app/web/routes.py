@@ -17,6 +17,7 @@ from app.models.models import User, Keyword, MessageLog, Broadcast
 from app.services.broadcast import broadcast_service
 from app.services.keyword_service import keyword_service
 from app.services.user_service import user_service
+from app.services.tg_client import tg_client_service
 from app.web.auth import (
     check_credentials, create_session_token, get_current_user,
     SESSION_COOKIE_NAME
@@ -559,4 +560,90 @@ async def serve_file(request: Request, filename: str):
         file_iterator(),
         media_type="application/octet-stream",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# --- Settings (Telegram account) ---
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    creds = await tg_client_service.get_credentials()
+    return templates.TemplateResponse("settings.html", {
+        "request": request,
+        "creds": creds,
+        "connected": bool(creds.get("session")),
+        "awaiting_code": bool(creds.get("api_id") and not creds.get("session")),
+        "flash": get_flash(request),
+        "admin_user": admin,
+    })
+
+
+@app.post("/settings/send-code")
+async def settings_send_code(
+    request: Request,
+    api_id: int = Form(...),
+    api_hash: str = Form(...),
+    phone: str = Form(...),
+):
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    try:
+        await tg_client_service.send_code(api_id, api_hash, phone.strip())
+        return RedirectResponse(
+            url="/settings?msg=SMS+код+отправлен+на+номер+" + phone.strip() + "&msg_type=success",
+            status_code=303,
+        )
+    except Exception as e:
+        logger.error(f"send_code error: {e}")
+        return RedirectResponse(
+            url=f"/settings?msg=Ошибка:+{str(e)[:80]}&msg_type=danger",
+            status_code=303,
+        )
+
+
+@app.post("/settings/verify-code")
+async def settings_verify_code(
+    request: Request,
+    code: str = Form(...),
+    password: str = Form(""),
+):
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    try:
+        info = await tg_client_service.sign_in(code, password)
+        return RedirectResponse(
+            url=f"/settings?msg=Аккаунт+подключён:+{info['name']}&msg_type=success",
+            status_code=303,
+        )
+    except ValueError as e:
+        return RedirectResponse(
+            url=f"/settings?msg={str(e)}&msg_type=warning",
+            status_code=303,
+        )
+    except Exception as e:
+        logger.error(f"sign_in error: {e}")
+        return RedirectResponse(
+            url=f"/settings?msg=Ошибка+кода:+{str(e)[:80]}&msg_type=danger",
+            status_code=303,
+        )
+
+
+@app.post("/settings/disconnect")
+async def settings_disconnect(request: Request):
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    await tg_client_service.disconnect()
+    return RedirectResponse(
+        url="/settings?msg=Аккаунт+отключён&msg_type=info",
+        status_code=303,
     )

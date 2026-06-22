@@ -62,6 +62,18 @@ class MessageLog(Base):
         return f"<MessageLog id={self.id} user_id={self.user_id} keyword={self.keyword_matched}>"
 
 
+class Setting(Base):
+    """Key-value store for runtime configuration (Pyrogram credentials, etc.)."""
+    __tablename__ = "settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<Setting key={self.key}>"
+
+
 class Broadcast(Base):
     __tablename__ = "broadcasts"
 

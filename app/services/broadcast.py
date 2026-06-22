@@ -10,6 +10,7 @@ from sqlalchemy import select, update
 
 from app.models.database import async_session_maker
 from app.models.models import Broadcast, User
+from app.services.tg_client import tg_client_service
 
 logger = logging.getLogger(__name__)
 
@@ -98,80 +99,102 @@ class BroadcastService:
 
         logger.info(f"Broadcast {broadcast_id}: targeting {len(user_ids)} users.")
 
+        # Try to get Pyrogram user-account client; fall back to bot
+        pyro_client = None
+        try:
+            pyro_client = await tg_client_service.get_client()
+            if pyro_client:
+                logger.info(f"Broadcast {broadcast_id}: using Pyrogram user account.")
+            else:
+                logger.info(f"Broadcast {broadcast_id}: using bot (no Pyrogram session).")
+        except Exception as e:
+            logger.warning(f"Could not start Pyrogram client: {e}. Falling back to bot.")
+            pyro_client = None
+
         sent_count = 0
         sent_this_hour = 0
         hour_start = datetime.now(timezone.utc)
         MAX_PER_HOUR = 40
 
-        for user_id, telegram_id in user_ids:
-            # Check hourly rate limit
-            now = datetime.now(timezone.utc)
-            if (now - hour_start) >= timedelta(hours=1):
-                # Reset hour window
-                sent_this_hour = 0
-                hour_start = now
+        try:
+            for user_id, telegram_id in user_ids:
+                # Check hourly rate limit
+                now = datetime.now(timezone.utc)
+                if (now - hour_start) >= timedelta(hours=1):
+                    sent_this_hour = 0
+                    hour_start = now
 
-            if sent_this_hour >= MAX_PER_HOUR:
-                # Wait until the hour window resets
-                wait_seconds = 3600 - (now - hour_start).total_seconds()
-                if wait_seconds > 0:
-                    logger.info(
-                        f"Broadcast {broadcast_id}: hourly limit reached. "
-                        f"Waiting {wait_seconds:.0f}s..."
-                    )
-                    await asyncio.sleep(wait_seconds)
-                sent_this_hour = 0
-                hour_start = datetime.now(timezone.utc)
+                if sent_this_hour >= MAX_PER_HOUR:
+                    wait_seconds = 3600 - (now - hour_start).total_seconds()
+                    if wait_seconds > 0:
+                        logger.info(f"Broadcast {broadcast_id}: hourly limit. Waiting {wait_seconds:.0f}s...")
+                        await asyncio.sleep(wait_seconds)
+                    sent_this_hour = 0
+                    hour_start = datetime.now(timezone.utc)
 
-            # Randomize message with zero-width space to avoid duplicate detection
-            randomized_message = message_text + ZERO_WIDTH_SPACE * random.randint(1, 5)
+                # Randomize message
+                randomized_message = message_text + ZERO_WIDTH_SPACE * random.randint(1, 5)
 
-            try:
-                await bot.send_message(chat_id=telegram_id, text=randomized_message)
-                sent_count += 1
-                sent_this_hour += 1
-                logger.debug(f"Broadcast {broadcast_id}: sent to {telegram_id}")
+                try:
+                    if pyro_client:
+                        await pyro_client.send_message(chat_id=telegram_id, text=randomized_message)
+                    else:
+                        await bot.send_message(chat_id=telegram_id, text=randomized_message)
 
-                # Update progress in DB periodically
-                if sent_count % 10 == 0:
+                    sent_count += 1
+                    sent_this_hour += 1
+                    logger.debug(f"Broadcast {broadcast_id}: sent to {telegram_id}")
+
+                    if sent_count % 10 == 0:
+                        async with async_session_maker() as session:
+                            await session.execute(
+                                update(Broadcast)
+                                .where(Broadcast.id == broadcast_id)
+                                .values(sent_count=sent_count)
+                            )
+                            await session.commit()
+
+                except TelegramForbiddenError:
+                    logger.info(f"User {telegram_id} blocked — unsubscribing.")
                     async with async_session_maker() as session:
                         await session.execute(
-                            update(Broadcast)
-                            .where(Broadcast.id == broadcast_id)
-                            .values(sent_count=sent_count)
+                            update(User).where(User.id == user_id).values(is_subscribed=False)
                         )
                         await session.commit()
 
-            except TelegramForbiddenError:
-                logger.info(f"User {telegram_id} blocked the bot — unsubscribing.")
-                async with async_session_maker() as session:
-                    await session.execute(
-                        update(User)
-                        .where(User.id == user_id)
-                        .values(is_subscribed=False)
-                    )
-                    await session.commit()
+                except TelegramBadRequest as e:
+                    if "bot was blocked" in str(e).lower() or "user is deactivated" in str(e).lower():
+                        logger.info(f"User {telegram_id} blocked/deactivated — unsubscribing.")
+                        async with async_session_maker() as session:
+                            await session.execute(
+                                update(User).where(User.id == user_id).values(is_subscribed=False)
+                            )
+                            await session.commit()
+                    else:
+                        logger.warning(f"TelegramBadRequest for {telegram_id}: {e}")
 
-            except TelegramBadRequest as e:
-                if "bot was blocked" in str(e).lower() or "user is deactivated" in str(e).lower():
-                    logger.info(f"User {telegram_id} blocked/deactivated — unsubscribing.")
-                    async with async_session_maker() as session:
-                        await session.execute(
-                            update(User)
-                            .where(User.id == user_id)
-                            .values(is_subscribed=False)
-                        )
-                        await session.commit()
-                else:
-                    logger.warning(f"TelegramBadRequest for {telegram_id}: {e}")
+                except Exception as e:
+                    if "USER_PRIVACY_RESTRICTED" in str(e):
+                        logger.info(f"User {telegram_id} has privacy restrictions — skipping.")
+                    elif "INPUT_USER_DEACTIVATED" in str(e) or "USER_DEACTIVATED" in str(e):
+                        logger.info(f"User {telegram_id} deactivated — unsubscribing.")
+                        async with async_session_maker() as session:
+                            await session.execute(
+                                update(User).where(User.id == user_id).values(is_subscribed=False)
+                            )
+                            await session.commit()
+                    else:
+                        logger.error(f"Error sending to {telegram_id}: {e}")
 
-            except Exception as e:
-                logger.error(f"Unexpected error sending to {telegram_id}: {e}")
+                delay = random.randint(30, 90)
+                await asyncio.sleep(delay)
 
-            # Anti-ban delay: random 30-90 seconds between messages
-            delay = random.randint(30, 90)
-            logger.debug(f"Broadcast {broadcast_id}: sleeping {delay}s before next message.")
-            await asyncio.sleep(delay)
+        finally:
+            if pyro_client:
+                try:
+                    await pyro_client.stop()
+                except Exception:
+                    pass
 
         # Mark broadcast as done
         async with async_session_maker() as session:
