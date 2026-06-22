@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Logs — Bot Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h2 class="fw-bold mb-0"><i class="bi bi-journal-text me-2 text-info"></i>Журнал событий</h2>
+    <span class="text-muted small">Последние 200 взаимодействий пользователей с ботом</span>
+  </div>
+  <span class="badge bg-secondary fs-6">{{ logs|length }} записей</span>
+</div>
+
+{% if logs %}
+<div class="card border-0">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover table-striped mb-0 align-middle">
+        <thead class="table-header">
+          <tr>
+            <th class="ps-4" style="width:40px">#</th>
+            <th>Пользователь</th>
+            <th>Ключевое слово</th>
+            <th>Файл</th>
+            <th class="pe-4">Время</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td class="ps-4 text-muted small">{{ loop.index }}</td>
+            <td>
+              {% if log.telegram_id %}
+                <div>
+                  <code class="text-info small">{{ log.telegram_id }}</code>
+                  {% if log.username %}
+                    <span class="text-muted small ms-1">@{{ log.username }}</span>
+                  {% endif %}
+                </div>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.keyword_matched %}
+                <code class="text-warning">{{ log.keyword_matched }}</code>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if log.file_sent %}
+                <span class="badge bg-secondary">
+                  <i class="bi bi-paperclip me-1"></i>
+                  {{ log.file_sent | truncate(25, true) }}
+                </span>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td class="pe-4">
+              <span class="text-muted small">
+                {{ log.timestamp.strftime('%d.%m.%Y %H:%M:%S') if log.timestamp else '—' }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card border-0">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-journal display-4 text-muted mb-3 d-block"></i>
+    <h5 class="text-muted">Логов пока нет</h5>
+    <p class="text-muted small">Взаимодействия пользователей с ботом будут отображаться здесь</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

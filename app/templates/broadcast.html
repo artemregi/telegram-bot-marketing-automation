@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Broadcast — Bot Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <h2 class="fw-bold mb-0"><i class="bi bi-megaphone me-2 text-danger"></i>Рассылка</h2>
+  <span class="ms-3 text-muted small">Массовая отправка сообщений подписчикам</span>
+</div>
+
+<div class="row g-4">
+  <!-- Compose Form -->
+  <div class="col-12 col-lg-7">
+    <div class="card border-0">
+      <div class="card-header bg-transparent border-secondary py-3">
+        <h5 class="mb-0 fw-semibold"><i class="bi bi-pencil-square me-2"></i>Новая рассылка</h5>
+      </div>
+      <div class="card-body p-4">
+        <form method="POST" action="/broadcast/start" id="broadcastForm">
+
+          <!-- Target audience -->
+          <div class="mb-4">
+            <label for="target_tag" class="form-label fw-semibold">
+              <i class="bi bi-people me-1 text-primary"></i>Аудитория
+            </label>
+            <select class="form-select" id="target_tag" name="target_tag" onchange="updateReachCount()">
+              <option value="">Все подписчики ({{ subscribed_count }} чел.)</option>
+              {% for tag in all_tags %}
+              <option value="{{ tag }}">Тег: {{ tag }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text" id="reachInfo">
+              Сообщение получат все активные подписчики
+            </div>
+          </div>
+
+          <!-- Message Text -->
+          <div class="mb-4">
+            <label for="message_text" class="form-label fw-semibold">
+              <i class="bi bi-chat-left-text me-1 text-success"></i>Текст сообщения <span class="text-danger">*</span>
+            </label>
+            <textarea
+              class="form-control"
+              id="message_text"
+              name="message_text"
+              rows="8"
+              placeholder="Введите текст рассылки...&#10;&#10;Поддерживается HTML: &lt;b&gt;жирный&lt;/b&gt;, &lt;i&gt;курсив&lt;/i&gt;"
+              required
+              oninput="updatePreview()"
+            ></textarea>
+            <div class="d-flex justify-content-between mt-1">
+              <span class="form-text">Поддерживается HTML-разметка Telegram</span>
+              <span class="form-text" id="charCount">0 символов</span>
+            </div>
+          </div>
+
+          <!-- Preview -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold text-muted">
+              <i class="bi bi-eye me-1"></i>Предпросмотр
+            </label>
+            <div class="border border-secondary rounded p-3 bg-dark" id="messagePreview" style="min-height:60px; font-size:0.95rem; color:#e6edf3; white-space:pre-wrap;">
+              <span class="text-muted small">Предпросмотр появится здесь...</span>
+            </div>
+          </div>
+
+          <!-- Submit -->
+          <div class="d-flex align-items-center gap-3">
+            <button type="submit" class="btn btn-danger px-5 fw-semibold" onclick="return confirmBroadcast()">
+              <i class="bi bi-send-fill me-2"></i>Запустить рассылку
+            </button>
+            <span class="text-muted small">
+              <i class="bi bi-shield-check me-1"></i>Задержка 30-90 сек между сообщениями
+            </span>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Panel -->
+  <div class="col-12 col-lg-5">
+    <div class="card border-0">
+      <div class="card-header bg-transparent border-secondary py-3 d-flex align-items-center justify-content-between">
+        <h5 class="mb-0 fw-semibold"><i class="bi bi-activity me-2"></i>Статус рассылок</h5>
+        <span class="badge bg-secondary" id="autoRefreshBadge">
+          <i class="bi bi-arrow-clockwise me-1"></i>Авто-обновление
+        </span>
+      </div>
+      <div class="card-body p-0" id="broadcastStatusContainer">
+        {% if recent_broadcasts %}
+          {% for b in recent_broadcasts %}
+          <div class="broadcast-item border-bottom border-secondary p-3">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <span class="small fw-semibold text-muted">#{{ b.id }}</span>
+              {% if b.status == 'running' %}
+                <span class="badge bg-warning text-dark">
+                  <i class="bi bi-play-fill me-1"></i>Запущена
+                </span>
+              {% elif b.status == 'done' %}
+                <span class="badge bg-success">
+                  <i class="bi bi-check2 me-1"></i>Завершена
+                </span>
+              {% elif b.status == 'draft' %}
+                <span class="badge bg-secondary">Черновик</span>
+              {% else %}
+                <span class="badge bg-danger">{{ b.status }}</span>
+              {% endif %}
+            </div>
+            <div class="small text-muted mb-1" style="word-break:break-word">{{ b.message_preview }}</div>
+            <div class="d-flex gap-3 small text-muted">
+              <span><i class="bi bi-send me-1"></i>{{ b.sent_count }} отправлено</span>
+              <span><i class="bi bi-tag me-1"></i>{{ b.target_tag }}</span>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-center py-5 text-muted" id="noBroadcasts">
+            <i class="bi bi-megaphone display-5 d-block mb-3 opacity-25"></i>
+            <span class="small">Рассылок пока не было</span>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Anti-ban Info -->
+    <div class="card border-0 mt-4">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-shield me-2 text-success"></i>Защита от бана</h6>
+        <ul class="small text-muted ps-3 mb-0">
+          <li class="mb-2">Задержка <strong>30–90 секунд</strong> между сообщениями</li>
+          <li class="mb-2">Максимум <strong>40 сообщений в час</strong></li>
+          <li class="mb-2">Нулевой символ Unicode для рандомизации</li>
+          <li>Автоматическая отписка заблокировавших</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function updatePreview() {
+    const text = document.getElementById('message_text').value;
+    const preview = document.getElementById('messagePreview');
+    const counter = document.getElementById('charCount');
+    counter.textContent = text.length + ' символов';
+    if (text.trim()) {
+      preview.innerHTML = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      preview.style.color = '#e6edf3';
+    } else {
+      preview.innerHTML = '<span class="text-muted small">Предпросмотр появится здесь...</span>';
+    }
+  }
+
+  function confirmBroadcast() {
+    const text = document.getElementById('message_text').value.trim();
+    const target = document.getElementById('target_tag').value;
+    if (!text) return false;
+    const audience = target ? `с тегом «${target}»` : 'всем подписчикам';
+    return confirm(`Запустить рассылку ${audience}?\n\nПервые символы:\n"${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`);
+  }
+
+  function updateReachCount() {
+    const tag = document.getElementById('target_tag').value;
+    const info = document.getElementById('reachInfo');
+    if (tag) {
+      info.textContent = `Сообщение получат подписчики с тегом «${tag}»`;
+    } else {
+      info.textContent = 'Сообщение получат все активные подписчики';
+    }
+  }
+
+  // Auto-refresh broadcast status every 5 seconds
+  async function refreshBroadcastStatus() {
+    try {
+      const response = await fetch('/api/broadcast/status');
+      if (!response.ok) return;
+      const data = await response.json();
+      const container = document.getElementById('broadcastStatusContainer');
+      const broadcasts = data.broadcasts;
+
+      if (!broadcasts || broadcasts.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-megaphone display-5 d-block mb-3 opacity-25"></i>
+            <span class="small">Рассылок пока не было</span>
+          </div>`;
+        return;
+      }
+
+      let html = '';
+      for (const b of broadcasts) {
+        const statusBadge = b.status === 'running'
+          ? '<span class="badge bg-warning text-dark"><i class="bi bi-play-fill me-1"></i>Запущена</span>'
+          : b.status === 'done'
+          ? '<span class="badge bg-success"><i class="bi bi-check2 me-1"></i>Завершена</span>'
+          : b.status === 'draft'
+          ? '<span class="badge bg-secondary">Черновик</span>'
+          : `<span class="badge bg-danger">${b.status}</span>`;
+
+        html += `
+          <div class="broadcast-item border-bottom border-secondary p-3">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <span class="small fw-semibold text-muted">#${b.id}</span>
+              ${statusBadge}
+            </div>
+            <div class="small text-muted mb-1" style="word-break:break-word">${b.message_preview}</div>
+            <div class="d-flex gap-3 small text-muted">
+              <span><i class="bi bi-send me-1"></i>${b.sent_count} отправлено</span>
+              <span><i class="bi bi-tag me-1"></i>${b.target_tag}</span>
+            </div>
+          </div>`;
+      }
+      container.innerHTML = html;
+    } catch (e) {
+      console.warn('Broadcast status refresh failed:', e);
+    }
+  }
+
+  // Only auto-refresh if on broadcast page
+  if (document.getElementById('broadcastStatusContainer')) {
+    setInterval(refreshBroadcastStatus, 5000);
+  }
+</script>
+{% endblock %}

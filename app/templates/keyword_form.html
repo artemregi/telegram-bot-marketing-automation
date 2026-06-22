@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}{% if keyword %}Редактировать{% else %}Новое{% endif %} ключевое слово — Bot Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <a href="/keywords" class="btn btn-outline-secondary btn-sm me-3">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div>
+    <h2 class="fw-bold mb-0">
+      <i class="bi bi-key me-2 text-warning"></i>
+      {% if keyword %}Редактировать ключевое слово{% else %}Новое ключевое слово{% endif %}
+    </h2>
+    <span class="text-muted small">{% if keyword %}ID: {{ keyword.id }}{% else %}Настройте автоматический ответ{% endif %}</span>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-12 col-lg-8">
+    <div class="card border-0">
+      <div class="card-body p-4">
+        <form
+          method="POST"
+          action="{% if keyword %}/keywords/{{ keyword.id }}/edit{% else %}/keywords{% endif %}"
+          enctype="multipart/form-data"
+          id="keywordForm"
+        >
+          <!-- Keyword Text -->
+          <div class="mb-4">
+            <label for="keyword" class="form-label fw-semibold">
+              <i class="bi bi-key me-1 text-warning"></i>Ключевое слово <span class="text-danger">*</span>
+            </label>
+            <input
+              type="text"
+              class="form-control form-control-lg"
+              id="keyword"
+              name="keyword"
+              placeholder="например: прайс, цены, купить"
+              value="{{ keyword.keyword if keyword else '' }}"
+              required
+            >
+            <div class="form-text">Регистр не важен — бот будет искать точное совпадение</div>
+          </div>
+
+          <!-- Response Text -->
+          <div class="mb-4">
+            <label for="response_text" class="form-label fw-semibold">
+              <i class="bi bi-chat-text me-1 text-primary"></i>Текст ответа
+            </label>
+            <textarea
+              class="form-control"
+              id="response_text"
+              name="response_text"
+              rows="4"
+              placeholder="Введите текст, который отправит бот в ответ на ключевое слово..."
+            >{{ keyword.response_text if keyword and keyword.response_text else '' }}</textarea>
+            <div class="form-text">Поддерживается HTML-разметка Telegram: &lt;b&gt;, &lt;i&gt;, &lt;a href=&quot;&quot;&gt;</div>
+          </div>
+
+          <!-- File Section -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-paperclip me-1 text-success"></i>Файл (фото / видео / документ)
+            </label>
+
+            {% if keyword and keyword.file_path %}
+            <div class="alert alert-secondary py-2 mb-2 d-flex align-items-center justify-content-between">
+              <span class="small"><i class="bi bi-file-earmark me-1"></i>Текущий файл: <code>{{ keyword.file_path }}</code></span>
+            </div>
+            {% endif %}
+
+            <div class="input-group mb-2">
+              <input
+                type="file"
+                class="form-control"
+                id="fileUpload"
+                accept="image/*,video/*,.pdf,.doc,.docx,.zip"
+              >
+              <button type="button" class="btn btn-outline-success" id="uploadBtn" onclick="uploadFile()">
+                <i class="bi bi-upload me-1"></i>Загрузить
+              </button>
+            </div>
+
+            <div id="uploadStatus" class="small text-muted mb-2"></div>
+
+            <!-- Hidden field to store uploaded filename -->
+            <input
+              type="hidden"
+              id="file_path"
+              name="file_path"
+              value="{{ keyword.file_path if keyword and keyword.file_path else '' }}"
+            >
+
+            <!-- File preview area -->
+            <div id="filePreview" class="mt-2" style="display:none">
+              <img id="previewImg" src="" alt="Preview" class="img-thumbnail" style="max-height:150px; display:none">
+            </div>
+
+            <div class="mt-2">
+              <label for="file_caption" class="form-label">Подпись к файлу</label>
+              <input
+                type="text"
+                class="form-control"
+                id="file_caption"
+                name="file_caption"
+                placeholder="Описание файла (необязательно)"
+                value="{{ keyword.file_caption if keyword and keyword.file_caption else '' }}"
+              >
+            </div>
+          </div>
+
+          <!-- Follow-up -->
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-clock me-1 text-info"></i>Отложенное сообщение (Follow-up)
+            </label>
+            <textarea
+              class="form-control mb-2"
+              id="follow_up_message"
+              name="follow_up_message"
+              rows="3"
+              placeholder="Сообщение, которое придёт пользователю через N минут..."
+            >{{ keyword.follow_up_message if keyword and keyword.follow_up_message else '' }}</textarea>
+            <div class="input-group" style="max-width:250px">
+              <span class="input-group-text bg-dark border-secondary text-muted">
+                <i class="bi bi-hourglass-split me-1"></i>Через
+              </span>
+              <input
+                type="number"
+                class="form-control"
+                id="follow_up_delay_minutes"
+                name="follow_up_delay_minutes"
+                min="1"
+                max="10080"
+                placeholder="60"
+                value="{{ keyword.follow_up_delay_minutes if keyword and keyword.follow_up_delay_minutes else '' }}"
+              >
+              <span class="input-group-text bg-dark border-secondary text-muted">минут</span>
+            </div>
+          </div>
+
+          <!-- Active Checkbox -->
+          <div class="mb-4">
+            <div class="form-check form-switch">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="is_active"
+                name="is_active"
+                value="on"
+                {% if not keyword or keyword.is_active %}checked{% endif %}
+              >
+              <label class="form-check-label fw-semibold" for="is_active">
+                Активно
+              </label>
+              <div class="form-text">Деактивированные слова не обрабатываются ботом</div>
+            </div>
+          </div>
+
+          <!-- Buttons -->
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success px-4">
+              <i class="bi bi-check-lg me-1"></i>
+              {% if keyword %}Сохранить{% else %}Создать{% endif %}
+            </button>
+            <a href="/keywords" class="btn btn-outline-secondary px-4">
+              <i class="bi bi-x-lg me-1"></i>Отмена
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help sidebar -->
+  <div class="col-12 col-lg-4 mt-4 mt-lg-0">
+    <div class="card border-0">
+      <div class="card-body p-4">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-info-circle me-2 text-info"></i>Подсказка</h6>
+        <ul class="small text-muted ps-3">
+          <li class="mb-2">Ключевое слово хранится в нижнем регистре</li>
+          <li class="mb-2">Бот ищет <strong>точное совпадение</strong> с сообщением пользователя</li>
+          <li class="mb-2">Можно указать текст ответа, файл или оба варианта</li>
+          <li class="mb-2">Follow-up позволяет отправить второе сообщение через заданное время</li>
+          <li>Поддерживаемые файлы: изображения, видео, документы</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function uploadFile() {
+  const fileInput = document.getElementById('fileUpload');
+  const status = document.getElementById('uploadStatus');
+  const filePathInput = document.getElementById('file_path');
+  const uploadBtn = document.getElementById('uploadBtn');
+
+  if (!fileInput.files || fileInput.files.length === 0) {
+    status.textContent = 'Выберите файл для загрузки.';
+    status.className = 'small text-warning';
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+
+  uploadBtn.disabled = true;
+  status.textContent = 'Загрузка...';
+  status.className = 'small text-info';
+
+  try {
+    const response = await fetch('/upload-file', { method: 'POST', body: formData });
+    if (response.ok) {
+      const data = await response.json();
+      filePathInput.value = data.filename;
+      status.innerHTML = `<i class="bi bi-check-circle text-success me-1"></i>Загружено: <code>${data.filename}</code>`;
+      status.className = 'small text-success';
+
+      // Show image preview
+      const ext = data.filename.split('.').pop().toLowerCase();
+      if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
+        const previewDiv = document.getElementById('filePreview');
+        const previewImg = document.getElementById('previewImg');
+        previewImg.src = `/files/${data.filename}`;
+        previewImg.style.display = 'block';
+        previewDiv.style.display = 'block';
+      }
+    } else {
+      const err = await response.json();
+      status.textContent = 'Ошибка: ' + (err.detail || 'неизвестная ошибка');
+      status.className = 'small text-danger';
+    }
+  } catch (e) {
+    status.textContent = 'Ошибка сети: ' + e.message;
+    status.className = 'small text-danger';
+  } finally {
+    uploadBtn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

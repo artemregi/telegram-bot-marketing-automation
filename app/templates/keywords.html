@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Keywords — Bot Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h2 class="fw-bold mb-0"><i class="bi bi-key me-2 text-warning"></i>Ключевые слова</h2>
+    <span class="text-muted small">Настройка автоматических ответов</span>
+  </div>
+  <a href="/keywords/new" class="btn btn-success">
+    <i class="bi bi-plus-lg me-1"></i>Добавить
+  </a>
+</div>
+
+{% if keywords %}
+<div class="card border-0">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover table-striped mb-0 align-middle">
+        <thead class="table-header">
+          <tr>
+            <th class="ps-4" style="width:40px">#</th>
+            <th>Ключевое слово</th>
+            <th>Файл</th>
+            <th>Ответ</th>
+            <th>Follow-up</th>
+            <th class="text-center" style="width:100px">Активно</th>
+            <th class="text-end pe-4" style="width:140px">Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for kw in keywords %}
+          <tr>
+            <td class="ps-4 text-muted small">{{ loop.index }}</td>
+            <td>
+              <code class="text-warning fs-6">{{ kw.keyword }}</code>
+            </td>
+            <td>
+              {% if kw.file_path %}
+                <span class="badge bg-secondary">
+                  <i class="bi bi-paperclip me-1"></i>{{ kw.file_path | truncate(20, true) }}
+                </span>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if kw.response_text %}
+                <span class="text-light small" title="{{ kw.response_text }}">
+                  {{ kw.response_text[:60] }}{% if kw.response_text|length > 60 %}…{% endif %}
+                </span>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if kw.follow_up_message and kw.follow_up_delay_minutes %}
+                <span class="badge bg-info text-dark">
+                  <i class="bi bi-clock me-1"></i>{{ kw.follow_up_delay_minutes }} мин
+                </span>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <form method="POST" action="/keywords/{{ kw.id }}/toggle" class="d-inline">
+                <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="Переключить">
+                  {% if kw.is_active %}
+                    <i class="bi bi-toggle-on text-success fs-5"></i>
+                  {% else %}
+                    <i class="bi bi-toggle-off text-secondary fs-5"></i>
+                  {% endif %}
+                </button>
+              </form>
+            </td>
+            <td class="text-end pe-4">
+              <a href="/keywords/{{ kw.id }}/edit" class="btn btn-sm btn-outline-primary me-1">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="POST" action="/keywords/{{ kw.id }}/delete" class="d-inline" onsubmit="return confirmDelete('Удалить ключевое слово «{{ kw.keyword }}»?')">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card border-0">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-key display-4 text-muted mb-3 d-block"></i>
+    <h5 class="text-muted">Ключевых слов пока нет</h5>
+    <p class="text-muted small mb-4">Добавьте первое ключевое слово, чтобы настроить автоответ</p>
+    <a href="/keywords/new" class="btn btn-success">
+      <i class="bi bi-plus-lg me-1"></i>Добавить ключевое слово
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
