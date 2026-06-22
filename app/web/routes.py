@@ -38,7 +38,10 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 @app.on_event("startup")
 async def on_startup():
-    await create_tables()
+    # Run DB init in background so uvicorn starts accepting requests immediately.
+    # The healthcheck at /login will respond while tables are being created.
+    import asyncio
+    asyncio.create_task(create_tables())
 
 
 # --- Auth helpers ---
