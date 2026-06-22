@@ -708,6 +708,58 @@ async def settings_disconnect(request: Request):
     )
 
 
+@app.post("/settings/import-session")
+async def settings_import_session(
+    request: Request,
+    session_string: str = Form(...),
+    api_id: int = Form(...),
+    api_hash: str = Form(...),
+    phone: str = Form(...),
+):
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    try:
+        # Verify the session works before saving
+        from pyrogram import Client
+        client = Client(
+            name="verify",
+            api_id=api_id,
+            api_hash=api_hash,
+            session_string=session_string.strip(),
+            in_memory=True,
+        )
+        await client.start()
+        me = await client.get_me()
+        name = f"{me.first_name or ''} {me.last_name or ''}".strip() or me.username or str(me.id)
+        await client.stop()
+
+        from app.models.models import Setting
+        from app.services.tg_client import (
+            KEY_API_ID, KEY_API_HASH, KEY_PHONE, KEY_SESSION, KEY_ACCOUNT_NAME,
+            _set
+        )
+        async with async_session_maker() as session:
+            await _set(session, KEY_API_ID, str(api_id))
+            await _set(session, KEY_API_HASH, api_hash)
+            await _set(session, KEY_PHONE, phone.strip())
+            await _set(session, KEY_SESSION, session_string.strip())
+            await _set(session, KEY_ACCOUNT_NAME, name)
+            await session.commit()
+
+        return RedirectResponse(
+            url=f"/settings?msg=Аккаунт+импортирован:+{name}&msg_type=success",
+            status_code=303,
+        )
+    except Exception as e:
+        logger.error(f"import-session error: {e}")
+        return RedirectResponse(
+            url=f"/settings?msg=Ошибка+сессии:+{str(e)[:100]}&msg_type=danger",
+            status_code=303,
+        )
+
+
 @app.post("/settings/reset")
 async def settings_reset(request: Request):
     """Clear ALL auth state — return to the initial credentials form."""
