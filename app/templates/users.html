@@ -7,9 +7,56 @@
     <h2 class="fw-bold mb-0"><i class="bi bi-people me-2 text-primary"></i>Пользователи</h2>
     <span class="text-muted small">Управление базой подписчиков</span>
   </div>
-  <a href="/users/export.csv" class="btn btn-outline-success btn-sm">
-    <i class="bi bi-download me-1"></i>Экспорт CSV
-  </a>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addUserModal">
+      <i class="bi bi-person-plus me-1"></i>Добавить пользователя
+    </button>
+    <a href="/users/export.csv" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-download me-1"></i>Экспорт CSV
+    </a>
+  </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Добавить пользователя</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="/users/add">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Telegram ID <span class="text-danger">*</span></label>
+            <input type="number" class="form-control" name="telegram_id" placeholder="123456789" required>
+            <div class="form-text text-muted">Числовой ID пользователя в Telegram</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Username</label>
+            <div class="input-group">
+              <span class="input-group-text bg-dark border-secondary text-muted">@</span>
+              <input type="text" class="form-control" name="username" placeholder="username (без @)">
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Имя</label>
+              <input type="text" class="form-control" name="first_name" placeholder="Иван">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Фамилия</label>
+              <input type="text" class="form-control" name="last_name" placeholder="Иванов">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i>Добавить</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <!-- Search -->
@@ -98,11 +145,11 @@
               {% endif %}
             </td>
             <td class="text-center">
-              {% if u.is_subscribed %}
-                <span class="badge bg-success">Активна</span>
-              {% else %}
-                <span class="badge bg-secondary">Отписан</span>
-              {% endif %}
+              <form method="POST" action="/users/{{ u.id }}/subscribe" class="d-inline">
+                <button type="submit" class="badge border-0 {% if u.is_subscribed %}bg-success{% else %}bg-secondary{% endif %}" style="cursor:pointer" title="Нажмите, чтобы переключить">
+                  {% if u.is_subscribed %}Активна{% else %}Отписан{% endif %}
+                </button>
+              </form>
             </td>
             <td class="pe-4">
               <form method="POST" action="/users/{{ u.id }}/tag" class="d-flex gap-1">

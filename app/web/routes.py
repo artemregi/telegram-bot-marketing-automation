@@ -317,6 +317,53 @@ async def users_list(request: Request, search: str = ""):
     })
 
 
+@app.post("/users/add")
+async def user_add_manual(
+    request: Request,
+    telegram_id: int = Form(...),
+    username: str = Form(""),
+    first_name: str = Form(""),
+    last_name: str = Form(""),
+):
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    async with async_session_maker() as session:
+        existing = await user_service.get_user_by_telegram_id(session, telegram_id)
+        if existing:
+            return RedirectResponse(
+                url="/users?msg=Пользователь+с+таким+Telegram+ID+уже+существует&msg_type=warning",
+                status_code=303,
+            )
+        await user_service.upsert_user(
+            session,
+            telegram_id=telegram_id,
+            username=username.strip() or None,
+            first_name=first_name.strip() or None,
+            last_name=last_name.strip() or None,
+        )
+        await session.commit()
+
+    return RedirectResponse(url="/users?msg=Пользователь+добавлен&msg_type=success", status_code=303)
+
+
+@app.post("/users/{user_id}/subscribe")
+async def user_toggle_subscribe(request: Request, user_id: int):
+    admin = get_current_user(request)
+    if not admin:
+        return auth_redirect()
+
+    async with async_session_maker() as session:
+        result = await session.execute(select(User).where(User.id == user_id))
+        u = result.scalar_one_or_none()
+        if u:
+            u.is_subscribed = not u.is_subscribed
+            await session.commit()
+
+    return RedirectResponse(url="/users?msg=Статус+подписки+обновлён&msg_type=success", status_code=303)
+
+
 @app.post("/users/{user_id}/tag")
 async def user_add_tag(request: Request, user_id: int, tag: str = Form(...)):
     user = get_current_user(request)
